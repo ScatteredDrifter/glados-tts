@@ -110,15 +110,16 @@ class Glados:
         return audio
 
     # Generate audio file from given text as string
-    def generate_tts(self, input_text:str):
+    # @return String, denoting path to saved file
+    def generate_tts(self, input_text:str) -> str:
         filename = filename_parse(input_text)
         audio_file_exist = check_audio_file(filename)
         if (audio_file_exist):
             printed_log("The audio sample sent from cache.")
-            output_file = f"{audio_path}{filename}"
+            output_file:str = f"{audio_path}{filename}"
         else:
             audio = self.get_audio_from_text(input_text)
-            output_file = save_audio_file(audio,filename)
+            output_file:str = save_audio_file(audio,filename)
         return output_file
 
 def printed_log(message):
@@ -144,12 +145,6 @@ def filename_parse(input_text):
         ',' : ''}
     for key in replace_char_with:
         input_text = input_text.replace(key,replace_char_with[key])
-    # filename = input_text.replace(" ", "-")
-    # filename = filename.replace(".", "_")
-    # filename = filename.replace("!", "")
-    # filename = filename.replace("?", "")
-    # filename = filename.replace("°c", "degrees celcius")
-    # filename = filename.replace(",", "")+".wav"
     return input_text+".wav"
 
 # remove file after it was sent 
@@ -164,7 +159,8 @@ def remove_audio_file(file_path:str) -> bool:
         return False
 
 # temporarily save audio file to disk
-def save_audio_file(audio,filename=None):
+# returns path to saved file
+def save_audio_file(audio,filename=None) -> str:
     random_suffix:int = random.randint(0, 1000000)
     output_file_name:str = "GLaDOS-tts-tempfile{}.wav".format(random_suffix)
     # if(filename and len(filename)<200):

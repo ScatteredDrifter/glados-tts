@@ -2,9 +2,10 @@ import sys
 import os
 import logging
 import time
-from flask import Flask, request, send_file, after_this_request
+from typing import Optional
+from flask import Flask, Response, request, send_file, after_this_request
 import urllib.parse
-from glados import Glados,remove_audio_file
+from glados import Glados, play_sound,remove_audio_file
 
 sys.path.insert(0, os.getcwd()+'/glados_tts')
 logging.basicConfig(filename='glados_engine_service.log',
@@ -18,41 +19,105 @@ def printed_log(message):
 def print_timelapse(processName,old_time):
     printed_log(f"{processName} took {str((time.time() - old_time) * 1000)} ms")
 
+
 # If the script is run directly, assume remote engine
 if __name__ == "__main__":
+    # FIXME improve writing
+    # FIXME remove global state
     printed_log("Initializing TTS Remote Engine...")
-    glados = Glados()
+    glados:Glados = Glados()
     glados.load_glados_model()
-    PORT = 8124
+    PORT:int = 8124
 
-    printed_log("Initializing TTS Server...")
+    printed_log("Initializing webserver")
     app = Flask(__name__)
+    
+    # listening for request that will synthesizes text
+    # returns audiofile via http
     @app.route('/synthesize/', defaults={'text': ''},methods=["POST","GET"])
     @app.route('/synthesize/<path:text>',methods=["POST","GET"])
-    def synthesize(text):
+    def synthesize(text:str):
         @after_this_request
-        def delete_image(response):
-            print("deleting")
+        def delete_file(response:Response):
             remove_audio_file(output_file)
-            return response
-        # if(text == ''): return 'No input'
+
+        # default value for synthesizing 
+        # FIXME no primitive obsession please!
+        input_text:str = text 
+        
+        # receive text from get-request
         if(request.method=="GET"):
             # receiving text as url encoded get request 
             input_text = request.args.get('text')
-            
+        
+        # receive text from post-request
         elif(request.method=="POST"):
             input_text = request.data.decode('ascii')
 
-        printed_log(f"Input text: {input_text}")
+        # aborting request in case nothing was provided 
+        if input_text == "":
+            return 
+        
+        printed_log(f"given text: {input_text}")
         # get audio file
-        old_time = time.time()
-        output_file = glados.generate_tts(input_text)
+        old_time:float = time.time()
+        output_file:str = glados.generate_tts(input_text)
         print_timelapse("Time Generating audio file: ",old_time)
         
         # deleting entry after it was sent back
         # remove_audio_file(output_file)
         return send_file(output_file)
-
+    
+    # --- / 
+    # -- / also listening for requests that should be played locally on the server 
+    # used for services sending a request they cannot speak themself 
+    @app.route('/synthesize-local/', defaults={'text': ''},methods=["POST","GET"])
+    def synthesize_and_speak(text):
+        @after_this_request
+        def delete_file(response:Response):
+            remove_audio_file(output_file)
+        
+        if text == "": 
+            # no explicit text provided
+            return 
+        # handling     
+        if(request.method=="GET"):
+            # receiving text as url encoded get request 
+            input_text = request.args.get('text')
+        elif(request.method=="POST"):
+            input_text = request.data.decode('ascii')
+        # logging request
+        printed_log(f"Input text: {input_text}")
+        output_file = glados.generate_tts(input_text)
+        # playing sound locally
+        play_sound(output_file)
+        
+    # --- /
+    # -- / allowing to send promp and interact with lama interface via get-requests 
+    @app.route('/ask_llama/', defaults={'query': ''},methods=["GET"])
+    def synthesize_lama_response(query:str):
+        @after_this_request
+        def delete_file(response:Response):
+            remove_audio_file(output_file)
+        if query == "": 
+            # no explicit text provided
+            return 
+        # handling     
+        if(request.method=="GET"):
+            # receiving text as url encoded get request 
+            # FIXME improve typing
+            query:str = request.args.get('text')
+        elif(request.method=="POST"):
+            query:str = request.data.decode('ascii')
+        # logging request
+        printed_log(f"Input text: {input_text}")
+        output_file = glados.generate_tts(input_text)
+        # playing sound locally
+        play_sound(output_file)
+        
+        
+        
+    
     cli = sys.modules['flask.cli']
     cli.show_server_banner = lambda *x: None
     printed_log(f"Listening in http://localhost:{PORT}/synthesize/{'{PRHASE}'}")

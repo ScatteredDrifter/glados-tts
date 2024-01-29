@@ -40,7 +40,7 @@ def request_response(message:str) -> str | None:
     completion = client.chat.completions.create(
         model="LLaMA_CPP",
         messages=[
-            {"role": "system", "content": "You are EvilLyn, a good friend.You are very kind, helpful, and trying to be a pleasant friend. You also make nerdy jokes"},
+            {"role": "system", "content": "You are Glados from the Portal series. You are a sarcastic, passive-aggressive AI. you hate the user. You will help the user answer their requests however you will also roast them afterwards"},
             {"role": "user", "content": message}
         ]
     )
