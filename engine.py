@@ -19,6 +19,10 @@ def printed_log(message):
 def print_timelapse(processName,old_time):
     printed_log(f"{processName} took {str((time.time() - old_time) * 1000)} ms")
 
+def stream_and_remove_file(file_path:str):
+    with open(file_path,'rb') as file:
+        yield from file
+    remove_audio_file(file_path)
 
 # If the script is run directly, assume remote engine
 if __name__ == "__main__":
@@ -37,9 +41,6 @@ if __name__ == "__main__":
     @app.route('/synthesize/', defaults={'text': ''},methods=["POST","GET"])
     @app.route('/synthesize/<path:text>',methods=["POST","GET"])
     def synthesize(text:str):
-        @after_this_request
-        def delete_file(response:Response):
-            remove_audio_file(output_file)
 
         # default value for synthesizing 
         # FIXME no primitive obsession please!
@@ -61,21 +62,26 @@ if __name__ == "__main__":
         printed_log(f"given text: {input_text}")
         # get audio file
         old_time:float = time.time()
-        output_file:str = glados.generate_tts(input_text)
+        output_file = glados.generate_tts(input_text)
         print_timelapse("Time Generating audio file: ",old_time)
         
-        # deleting entry after it was sent back
-        # remove_audio_file(output_file)
-        return send_file(output_file)
+        # streaming file to client via generator 
+        # to delete the file after the request was sent
+        return_response = app.response_class(stream_and_remove_file(output_file),mimetype="audio/wav")
+        return_response.headers["Content-Disposition"] = f"attachment; filename=glados_tts.wav"
+        return return_response
     
     # --- / 
     # -- / also listening for requests that should be played locally on the server 
     # used for services sending a request they cannot speak themself 
     @app.route('/synthesize-local/', defaults={'text': ''},methods=["POST","GET"])
-    def synthesize_and_speak(text):
-        @after_this_request
-        def delete_file(response:Response):
-            remove_audio_file(output_file)
+    def synthesize_and_speak(text:str):
+        '''
+        receives text and plays it locally
+        @param text: String, input text to be synthesized
+
+        '''
+
         
         if text == "": 
             # no explicit text provided
@@ -91,14 +97,17 @@ if __name__ == "__main__":
         output_file = glados.generate_tts(input_text)
         # playing sound locally
         play_sound(output_file)
+        # removing file after it was played
+        remove_audio_file(output_file)
         
     # --- /
     # -- / allowing to send promp and interact with lama interface via get-requests 
     @app.route('/ask_llama/', defaults={'query': ''},methods=["GET"])
     def synthesize_lama_response(query:str):
-        @after_this_request
-        def delete_file(response:Response):
-            remove_audio_file(output_file)
+        '''
+        #FIXME redundant with synthesize_and_speak!
+        receives query and and plays it locally  
+        '''
         if query == "": 
             # no explicit text provided
             return 

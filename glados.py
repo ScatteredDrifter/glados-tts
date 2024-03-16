@@ -5,7 +5,8 @@
 
 # --- / 
 # -- / external imports
-from typing import final
+import numpy
+import numpy.typing
 import torch
 import random
 import logging
@@ -14,6 +15,8 @@ import time
 import os
 from sys import modules as mod
 import sys
+
+from torch.jit import ScriptFunction, ScriptModule
 
 try:
     import winsound
@@ -41,9 +44,9 @@ audio_path = os.getcwd()+'/audio/'
 class Glados:
     
     # FIXME improve writing
-    glados_model = None
-    vocoder = None
-    device = None
+    glados_model:ScriptModule = None
+    vocoder:ScriptFunction = None
+    device:str = None
 
 
     def __init__(self):
@@ -70,9 +73,14 @@ class Glados:
         return device_found
 
     def load_models(self):
-        self.glados_model = torch.jit.load('models/glados.pt')
-        self.vocoder = torch.jit.load('models/vocoder-gpu.pt', map_location=self.device)
-
+        try:
+            self.glados_model = torch.jit.load('models/glados.pt')
+            self.vocoder = torch.jit.load('models/vocoder-gpu.pt', map_location=self.device)
+        except Exception as exception:
+            printed_log("could not load glados or vocoder")
+            printed_log(exception)
+            sys.exit()
+        # preloading model with test-run 
         for i in range(4):
             init = self.glados_model.generate_jit(prepare_text(str(i)))
             init_mel = init['mel_post'].to(self.device)
@@ -83,23 +91,29 @@ class Glados:
         option_devices = ["vulkan","cuda"]
         while(self.glados_model==None):
             self.device = self.get_available_device(option_devices)
-            try:
-                self.load_models()
-            except:
-                printed_log(f"Exception loading device "+self.device)
-                if(self.device != 'cpu'): option_devices.remove(self.device)
-                else: sys.exit()
+            # try:
+            self.load_models()
+            # except:
+            printed_log(f"Exception loading device "+self.device)
+            # removing device from list of available devices
+            #if(self.device != 'cpu'): option_devices.remove(self.device)
 
-    def get_audio_from_text(self,text):
+    def get_audio_from_text(self,text) -> numpy.typing.NDArray:
+        '''
+        #FIXME add type hint
+        @param text: String, input text to be synthesized
+        @return: numpy array, audio data 
+        prepares text and pipes it through model
+        '''
     	# Tokenize, clean and phonemize input text
-        phonemized_text = prepare_text(text).to(self.device)
+        phonemized_text = prepare_text(text)
         with torch.no_grad():
             # Generate generic TTS-output
             old_time = time.time()
             tts_output = self.glados_model.generate_jit(phonemized_text)
 
             # Use HiFiGAN as vocoder to make output sound like GLaDOS
-            mel = tts_output['mel_post'].to(self.device)
+            mel = tts_output['mel_post']
             audio = self.vocoder(mel)
             print_timelapse("The audio sample: ",old_time)
 
@@ -158,24 +172,29 @@ def remove_audio_file(file_path:str) -> bool:
     finally:
         return False
 
+
 # temporarily save audio file to disk
 # returns path to saved file
-def save_audio_file(audio,filename=None) -> str:
+def save_audio_file(audio:numpy.typing.NDArray) -> str:
+    ''' 
+    @param audio: numpy array, audio data
+    @return: String, denoting path to saved audio file
+    creates random prefix for filename and saves audio to it, returns the path to it too
+    '''
     random_suffix:int = random.randint(0, 1000000)
     output_file_name:str = "GLaDOS-tts-tempfile{}.wav".format(random_suffix)
-    # if(filename and len(filename)<200):
-        # output_file_name = filename
     output_file = (f"{audio_path}{output_file_name}")
+
     # Write audio file to disk at 22,05 kHz sample rate
     logging.info(f"Saving audio as {output_file}")
     write(output_file, 22050, audio)
     return output_file
 
-def check_audio_folder():
+def check_audio_folder() -> None:
     if not os.path.exists('audio'):
         os.makedirs('audio')
 
-def check_audio_file(filename):
+def check_audio_file(filename) -> bool:
     complete_path = f"{audio_path}{filename}"
     already_exist = os.path.exists(complete_path)
     # Update access time. This will allow for routine cleanups
@@ -183,6 +202,7 @@ def check_audio_file(filename):
     return already_exist
 
 def main():
+    #FIXME remove, only acts as library
     printed_log("Initializing TTS Engine...")
     glados = Glados()
     glados.load_glados_model()
