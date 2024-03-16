@@ -2,5 +2,7 @@
 *.wav
 audio/*
 pyenv/*
+venv/*
 **/.vscode/** 
 **/glados_service.log
+.gitignore
