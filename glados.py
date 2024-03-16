@@ -126,30 +126,46 @@ class Glados:
     # Generate audio file from given text as string
     # @return String, denoting path to saved file
     def generate_tts(self, input_text:str) -> str:
+        '''
+        #FIXME improve writing
+        @param input_text: String, input text to be synthesized
+        @return: String, denoting path to saved file
+        generates audio file from given text, saves it to disk and returns path to file 
+        '''
         filename = filename_parse(input_text)
         audio_file_exist = check_audio_file(filename)
         if (audio_file_exist):
-            printed_log("The audio sample sent from cache.")
             output_file:str = f"{audio_path}{filename}"
         else:
             audio = self.get_audio_from_text(input_text)
-            output_file:str = save_audio_file(audio,filename)
+            output_file:str = save_audio_file(audio)
         return output_file
 
-def printed_log(message):
+
+def printed_log(message) -> None:
     logging.info(message)
     print(message)
 
-def print_timelapse(processName,old_time):
+def print_timelapse(processName:str,old_time:float) -> None:
     printed_log(f"{processName} took {str((time.time() - old_time) * 1000)} ms")
 
-def play_sound(fileName):
+def play_sound(fileName:str) -> None:
+    '''
+    #FIXME improve writing
+    @param fileName: String, path to audio file
+    takes audiofile and tries to play it
+    '''
     if 'winsound' in mod:
         winsound.PlaySound(fileName, winsound.SND_FILENAME)
     else:
         call(["aplay", fileName])
 
-def filename_parse(input_text):
+def filename_parse(input_text:str) -> str:
+    '''
+    @param input_text: String, input text to be synthesized
+    @return: String, denoting path to saved file
+    replaces special characters to create easy to use filename adds ".wav" to obtained filename
+    '''
     replace_char_with = { 
         ' ' : '-',
         '.' : '_',
@@ -161,10 +177,13 @@ def filename_parse(input_text):
         input_text = input_text.replace(key,replace_char_with[key])
     return input_text+".wav"
 
+# ---
+
 # remove file after it was sent 
 def remove_audio_file(file_path:str) -> bool:
     try:
         os.remove(file_path)
+        printed_log(f"Removed audio file {file_path}")
         return True
     except:
         printed_log(f"Error removing audio file {file_path}")
